@@ -438,7 +438,7 @@
           }, 30000)
           setTimeout(()=>{
             preload.crossorigin="anonymous"
-            preload.src = window.location.href + tracks[nextRnd] + (userInteracted ? '?autoplay' : '')
+            preload.src = tracks[nextRnd]
             preload.onloadeddata=()=>{
               clearInterval(loadingTimer)
               bufferedTrack.innerHTML='<span style="color: #afc;font-weight: 900;">next track:</span>'+` <span class="loaded">(loaded!)</span>`+'<br>'+('&nbsp;').repeat(4)+'<span class="bufferTrackTitle">'+nextTrackName+'</span>'

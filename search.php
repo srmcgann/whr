@@ -1,105 +1,52 @@
 <?
-  require('db.php');
+  function iso8601ToSeconds($input) {
+    $duration = new DateInterval($input);
+    $hours_to_seconds = $duration->h * 60 * 60;
+    $minutes_to_seconds = $duration->i * 60;
+    $seconds = $duration->s;
+    return $hours_to_seconds + $minutes_to_seconds + $seconds;
+  }
+
+  $APIKEY='AIzaSyC5lOr7yMZPnNmc2zNyRc1hLcrUHP7DPsQ';
+  $maxSeconds=600;
+
+  require('../db.php');
   $data = json_decode(file_get_contents('php://input'));
-  $string = mysqli_real_escape_string($link, $data->{'string'});
-  $loggedinUserName = mysqli_real_escape_string($link, $data->{'loggedinUserName'});
-  $passhash = mysqli_real_escape_string($link, $data->{'passhash'});
-  $page = mysqli_real_escape_string($link, $data->{'page'});
+  $sparam = mysqli_real_escape_string($link, $data->{'sparam'});
   $exact = mysqli_real_escape_string($link, $data->{'exact'});
   $allWords = mysqli_real_escape_string($link, $data->{'allWords'});
-  $overrideMaxResults = mysqli_real_escape_string($link, $data->{'maxResultsPerPage'});
-  if($overrideMaxResults) $maxResultsPerPage = $overrideMaxResults;
-
-  if($exact){
-    $tokens = [ $string ];
-  }else{
-    $tokens = explode(' ', $string);
+  if(!$sparam) die();
+  $sparam = urlencode($sparam);
+  $searchURL = "https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=50&q=$sparam&key=$APIKEY";
+  $res = file_get_contents($searchURL);
+  $data=json_decode($res);
+  $v_ids=[];
+  $i=0;
+  forEach($data->{'items'} as $item){
+    $v_ids[]=$item->{'id'}->{'videoId'};
+    $i++;
   }
-  
-  if($allWords){
-    $clause = 'AND';
-  }else{
-    $clause = 'OR';
+  $v_ids=implode(',',$v_ids);
+  $detailsURL = "https://www.googleapis.com/youtube/v3/videos?part=contentDetails&part=snippet&id=$v_ids&key=$APIKEY";
+  $details=file_get_contents($detailsURL);
+  $detailsData=json_decode($details)->{'items'};
+  forEach($detailsData as $details){
+    $v_id=$details->{'id'}->{'videoId'};
+    $title = $details->{'snippet'}->{'title'};
+    $duration=iso8601ToSeconds($details->{'contentDetails'}->{'duration'});
+    $details->{'contentDetails'}->{'duration'}=$duration<=$maxSeconds?$duration:0;
   }
-  
-  $admin = false;
-  $start = $maxResultsPerPage * $page;
-
-  if(sizeof($tokens)){
-    
-    $confirmed = false;
-    if($loggedinUserName){
-      $sql = 'SELECT * FROM users WHERE name LIKE "' . $loggedinUserName . '" AND passhash = "' .  $passhash . '"';
-      if($res = mysqli_query($link, $sql)){
-        $row = mysqli_fetch_assoc($res);
-        $loggedinUserData = $row;
-        $confirmed = true;
-        if($row['admin']) $admin = true;
-      }
-    }
-
-    if($loggedinUserName && $confirmed){
-      $sql = 'SELECT * FROM audiocloudTracks WHERE (private = 0 || userID = '.$loggedinUserData['id'].') AND (description LIKE "%' . $tokens[0] . '%"';
-    }else{
-      $sql = 'SELECT * FROM audiocloudTracks WHERE private = 0 AND (description LIKE "%' . $tokens[0] . '%"';
-    }
-    if(sizeof($tokens>1)){
-      array_shift($tokens);
-      forEach($tokens as $token){
-        $sql .= ' ' . $clause . ' description LIKE "%'.$token.'%"';
-      }
-    }
-    $sql .= ')';
-    if($exact){
-      $tokens = [ $string ];
-    }else{
-      $tokens = explode(' ', $string);
-    }
-    $sql .= ' OR (trackName LIKE "%' . $tokens[0] . '%"';
-    if(sizeof($tokens>1)){
-      array_shift($tokens);
-      forEach($tokens as $token){
-        $sql .= ' ' . $clause . ' trackName LIKE "%'.$token.'%"';
-      }
-    }
-    $sql .= ')';
-    if($exact){
-      $tokens = [ $string ];
-    }else{
-      $tokens = explode(' ', $string);
-    }
-    $sql .= ' OR (author LIKE "%' . $tokens[0] . '%"';
-    if(sizeof($tokens>1)){
-      array_shift($tokens);
-      forEach($tokens as $token){
-        $sql .= ' ' . $clause . ' author LIKE "%'.$token.'%"';
-      }
-    }
-    $sql .= ')';
+  $detailsData = array_filter($detailsData, function($v) { return !!$v->{'contentDetails'}->{'duration'}; });
+  $ret=[];
+  forEach($detailsData as $details){
+    $ret[]=$details;
   }
-  
-  $sql1 = $sql;
-  $res = mysqli_query($link, $sql);
-  $totalRecords = mysqli_num_rows($res);
-  $totalPages = (($totalRecords-1) / $maxResultsPerPage | 0) + 1;
+  $detailsData=$ret;
 
+  $allWords=$allWords?1:0;
+  $exact=$exact?1:0;
+  $searchURL = "https://audiocloud.dweet.net/getSearch.php?search=$sparam&page=0&exact=$exact&allWords=$allWords&maxResultsPerPage=25";
+  $res = file_get_contents($searchURL);
 
-  $sql .= ' ORDER BY date DESC LIMIT ' . $start . ', ' . $maxResultsPerPage;
-  $res = mysqli_query($link, $sql);
-  
-  $tracks = [];
-  for($i = 0; $i < mysqli_num_rows($res); ++$i){
-    $tracks[] = mysqli_fetch_assoc($res);
-  }
-  forEach($tracks as &$track){
-    $trackID = $track['id'];
-    $sql = 'SELECT * FROM audiocloudComments WHERE trackID = ' . $trackID;
-    $res = mysqli_query($link, $sql);
-    $track['comments'] = [];
-    for($j=0;$j<mysqli_num_rows($res);++$j){
-      $track['comments'][] = mysqli_fetch_assoc($res);
-    }
-  }
-  echo json_encode([$tracks, $totalPages, $page, $totalRecords, $sql1]);
+  echo json_encode([true, $detailsData, $res]);
 ?>
-

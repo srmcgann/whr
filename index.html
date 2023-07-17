@@ -438,7 +438,7 @@
           }, 30000)
           setTimeout(()=>{
             preload.crossorigin="anonymous"
-            preload.src = tracks[nextRnd]
+            preload.src = window.location.href + tracks[nextRnd] + (userInteracted ? '?autoplay' : '')
             preload.onloadeddata=()=>{
               clearInterval(loadingTimer)
               bufferedTrack.innerHTML='<span style="color: #afc;font-weight: 900;">next track:</span>'+` <span class="loaded">(loaded!)</span>`+'<br>'+('&nbsp;').repeat(4)+'<span class="bufferTrackTitle">'+nextTrackName+'</span>'
@@ -448,13 +448,13 @@
       }
       
       playTrack=idx=>{
-        let src = 'https://audioplayer1.whitehot.ninja/index.html?i=' + location.origin + '/' + tracks[idx] + (userInteracted ? '?autoplay' : '')
+        let src = 'https://audioplayer.whitehot.ninja/index.html?i=' + location.origin + '/' + tracks[idx] + (userInteracted ? '?autoplay' : '')
         console.log(idx, userInteracted, src)
         let el
         (el = document.querySelectorAll('.playerFrame')[0])
         preloadNext()
         postMessage(JSON.stringify({'userInteracted': userInteracted}))
-        el.src = 'https://audioplayer1.whitehot.ninja/index.html?i=' + location.origin + '/' + tracks[idx] + (userInteracted ? '?autoplay' : '')
+        el.src = 'https://audioplayer.whitehot.ninja/index.html?i=' + location.origin + '/' + tracks[idx] + (userInteracted ? '?autoplay' : '')
       }
       
       curIDX = 0
